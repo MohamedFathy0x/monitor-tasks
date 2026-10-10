@@ -48,14 +48,19 @@ jobs:
         run: |
           git config user.name "state-bot"
           git config user.email "action@users.noreply.github.com"
-          END=$((SECONDS + 3300))
-          while [ $SECONDS -lt $END ]; do
+          # one-shot verification modes end immediately — only the normal
+          # mode runs the continuous monitoring loop
+          if [ -n "$MODE" ] && [ "$MODE" != "normal" ]; then
             case "$MODE" in
               hello)     python watch.py --hello ;;
               bootstrap) python watch.py --bootstrap ;;
               dry-run)   python watch.py --dry-run ;;
-              *)         python watch.py || true ;;
             esac
+            exit 0
+          fi
+          END=$((SECONDS + 3300))
+          while [ $SECONDS -lt $END ]; do
+            python watch.py || true
             # persist detections immediately — a cancelled run can never
             # cause a duplicate notification this way
             git add state.json HEARTBEAT.md
