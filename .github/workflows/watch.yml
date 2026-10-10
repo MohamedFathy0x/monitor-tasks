@@ -38,7 +38,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Monitor loop (~55 min, one check every 90s)
+      - name: Monitor loop (~55 min, one check every 15s)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -64,7 +64,7 @@ jobs:
               git pull --rebase https://github.com/MohamedFathy0x/monitor-tasks.git main || true
               git push || true
             fi
-            sleep 90
+            sleep 15
           done
           # hand over to a fresh runner so monitoring never stops (3 attempts)
           for i in 1 2 3; do
