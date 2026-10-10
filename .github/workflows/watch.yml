@@ -1,0 +1,103 @@
+name: scheduled watch
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "run mode"
+        required: false
+        default: "normal"
+        type: choice
+        options:
+          - normal
+          - bootstrap
+          - dry-run
+          - hello
+  # external trigger (the monitor loop re-fires itself through this every
+  # hour; an hourly schedule below acts as a dead-man's-switch recovery)
+  repository_dispatch:
+    types: [watch]
+  schedule:
+    - cron: "23 * * * *"   # hourly recovery kick if the loop chain ever dies
+
+permissions:
+  contents: write             # needed to commit state.json back
+
+concurrency:
+  group: watch
+  cancel-in-progress: true    # never let runs pile up — newest wins
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 66       # our own cap — well under GitHub's 6-hour job limit
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Monitor loop (~55 min, one check every 90s)
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          FEED_URL: ${{ vars.FEED_URL }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          git config user.name "state-bot"
+          git config user.email "action@users.noreply.github.com"
+          END=$((SECONDS + 3300))
+          while [ $SECONDS -lt $END ]; do
+            case "$MODE" in
+              hello)     python watch.py --hello ;;
+              bootstrap) python watch.py --bootstrap ;;
+              dry-run)   python watch.py --dry-run ;;
+              *)         python watch.py || true ;;
+            esac
+            # persist detections immediately — a cancelled run can never
+            # cause a duplicate notification this way
+            git add state.json HEARTBEAT.md
+            if ! git diff --cached --quiet; then
+              git commit -m "update [skip ci]"
+              git pull --rebase https://github.com/MohamedFathy0x/monitor-tasks.git main || true
+              git push || true
+            fi
+            sleep 90
+          done
+          # hand over to a fresh runner so monitoring never stops (3 attempts)
+          for i in 1 2 3; do
+            if curl -sf -X POST \
+                -H "Authorization: Bearer $GH_PAT" \
+                -H "Accept: application/vnd.github+json" \
+                https://api.github.com/repos/MohamedFathy0x/monitor-tasks/dispatches \
+                -d '{"event_type":"watch"}'; then
+              echo "hand-off dispatched"
+              break
+            fi
+            echo "hand-off attempt $i failed, retrying..."
+            sleep 20
+          done
+
+      - name: Persist state (final safety net)
+        if: always()
+        run: |
+          git config user.name "state-bot"
+          git config user.email "action@users.noreply.github.com"
+          git add state.json HEARTBEAT.md
+          git diff --cached --quiet || git commit -m "update [skip ci]"
+          git push || true
+
+      - name: Prune workflow runs older than 30 days
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          CUTOFF=$(date -u -d "30 days ago" +%Y-%m-%dT%H:%M:%SZ)
+          gh api "repos/MohamedFathy0x/monitor-tasks/actions/runs?per_page=100&created=%3C$CUTOFF" \
+            --jq '.workflow_runs[] | select(.status == "completed") | .id' | head -30 \
+          | while read -r id; do
+              [ -n "$id" ] && gh api -X DELETE "repos/MohamedFathy0x/monitor-tasks/actions/runs/$id" || true
+            done

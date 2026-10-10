@@ -1,0 +1,14 @@
+{
+  "telegram_bot_token": "",
+  "telegram_chat_id": "",
+  "disable_link_preview": true,
+  "notify_removed": false,
+  "feeds": [
+    {
+      "name": "primary-feed",
+      "type": "scope_csv",
+      "url": "",
+      "enabled": true
+    }
+  ]
+}
