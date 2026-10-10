@@ -55,11 +55,16 @@ def load_config():
 
 
 def load_state():
+    state = {"feeds": {}, "last_heartbeat": 0}
     try:
         with open(STATE_PATH, encoding="utf-8") as fh:
-            return json.load(fh)
-    except Exception:
-        return {"feeds": {}, "last_heartbeat": 0}
+            loaded = json.load(fh)
+        if isinstance(loaded, dict):
+            state.update(loaded)
+    except Exception as exc:
+        log(f"state file unreadable ({exc}); starting fresh")
+    state.setdefault("feeds", {})
+    return state
 
 
 def save_state(state):
