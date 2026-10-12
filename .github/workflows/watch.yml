@@ -59,6 +59,9 @@ jobs:
             exit 0
           fi
           END=$((SECONDS + 3300))
+          stopped() {
+            python3 -c "import base64,json,sys; raw=open('state.json').read().strip(); s=json.loads(raw if raw.startswith('{') else base64.b64decode(raw)); sys.exit(0 if s.get('stopped') else 1)"
+          }
           while [ $SECONDS -lt $END ]; do
             python watch.py || true
             # persist detections immediately — a cancelled run can never
@@ -69,21 +72,32 @@ jobs:
               git pull --rebase https://github.com/MohamedFathy0x/monitor-tasks.git main || true
               git push || true
             fi
-            sleep 15
-          done
-          # hand over to a fresh runner so monitoring never stops (3 attempts)
-          for i in 1 2 3; do
-            if curl -sf -X POST \
-                -H "Authorization: Bearer $GH_PAT" \
-                -H "Accept: application/vnd.github+json" \
-                https://api.github.com/repos/MohamedFathy0x/monitor-tasks/dispatches \
-                -d '{"event_type":"watch"}'; then
-              echo "hand-off dispatched"
+            # stand-down: the alert was delivered -> stop checking, no hand-off
+            if stopped; then
+              echo "mission accomplished - standing down"
               break
             fi
-            echo "hand-off attempt $i failed, retrying..."
-            sleep 20
+            sleep 15
           done
+          if stopped; then
+            # disable the workflow so nothing re-fires (schedule + dispatch)
+            GH_TOKEN="$GH_PAT" gh workflow disable watch.yml \
+              --repo MohamedFathy0x/monitor-tasks || true
+          else
+            # hand over to a fresh runner so monitoring never stops (3 attempts)
+            for i in 1 2 3; do
+              if curl -sf -X POST \
+                  -H "Authorization: Bearer $GH_PAT" \
+                  -H "Accept: application/vnd.github+json" \
+                  https://api.github.com/repos/MohamedFathy0x/monitor-tasks/dispatches \
+                  -d '{"event_type":"watch"}'; then
+                echo "hand-off dispatched"
+                break
+              fi
+              echo "hand-off attempt $i failed, retrying..."
+              sleep 20
+            done
+          fi
 
       - name: Persist state (final safety net)
         if: always()

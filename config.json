@@ -3,6 +3,7 @@
   "telegram_chat_id": "",
   "disable_link_preview": true,
   "notify_removed": false,
+  "stop_after_alert": true,
   "feeds": [
     {
       "name": "primary-feed",

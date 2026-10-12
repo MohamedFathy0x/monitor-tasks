@@ -1,0 +1,5 @@
+runlogs/
+runlogs2/
+*.zip
+__pycache__/
+verify_fix.py

@@ -1,15 +1,1 @@
-{
- "feeds": {
-  "primary-feed": {
-   "items": {
-    "*.iso.com": {
-     "type": "WILDCARD"
-    },
-    "*.verisk.com": {
-     "type": "WILDCARD"
-    }
-   }
-  }
- },
- "last_heartbeat": 1791810484.712529
-}
+eyJmZWVkcyI6IHsicHJpbWFyeS1mZWVkIjogeyJpdGVtcyI6IHsiKi5pc28uY29tIjogeyJ0eXBlIjogIldJTERDQVJEIn0sICIqLnZlcmlzay5jb20iOiB7InR5cGUiOiAiV0lMRENBUkQifX19fSwgImxhc3RfaGVhcnRiZWF0IjogMTc5MTgyMjYzMS41NDQwNTA3fQ==

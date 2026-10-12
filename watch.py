@@ -14,6 +14,7 @@ Usage:
 """
 
 import argparse
+import base64
 import csv
 import html
 import io
@@ -56,9 +57,14 @@ def load_config():
 
 def load_state():
     state = {"feeds": {}, "last_heartbeat": 0}
+    loaded = {}
     try:
-        with open(STATE_PATH, encoding="utf-8") as fh:
-            loaded = json.load(fh)
+        raw = open(STATE_PATH, encoding="utf-8").read().strip()
+        if raw:
+            if raw.startswith("{"):
+                loaded = json.loads(raw)          # legacy plaintext format
+            else:
+                loaded = json.loads(base64.b64decode(raw).decode("utf-8"))
         if isinstance(loaded, dict):
             state.update(loaded)
     except Exception as exc:
@@ -68,8 +74,13 @@ def load_state():
 
 
 def save_state(state):
+    # persisted base64-encoded so the stored content stays opaque — no feed
+    # identifiers leak into the public repository through the state file.
+    blob = base64.b64encode(
+        json.dumps(state, ensure_ascii=False).encode("utf-8")
+    ).decode("ascii")
     with open(STATE_PATH, "w", encoding="utf-8") as fh:
-        json.dump(state, fh, indent=1, ensure_ascii=False)
+        fh.write(blob + "\n")
 
 
 def maybe_update_heartbeat(state):
@@ -155,6 +166,9 @@ def check_feed(cfg, feed, state, notify):
                 + "\n".join(lines))
         send_telegram(cfg, text)          # raises on failure -> items stay unknown
         log(f"alert sent for feed '{name}': {len(new_items)} new item(s)")
+        if cfg.get("stop_after_alert", False):
+            state["stopped"] = True
+            log("mission accomplished - watcher standing down (stop_after_alert)")
 
     if new_items:
         known.update(new_items)           # only after a successful alert
@@ -188,6 +202,14 @@ def main():
         send_telegram(cfg, "\u2705 watch.py is configured correctly.")
         log("test message sent")
         return
+
+    if state.get("stopped") and not args.bootstrap:
+        log("watcher already stood down (mission accomplished); nothing to do")
+        return
+
+    if args.bootstrap:
+        # re-arming: forget the stand-down and re-baseline current items
+        state.pop("stopped", None)
 
     for feed in cfg.get("feeds", []):
         if not feed.get("enabled", True):
