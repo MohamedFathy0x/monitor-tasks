@@ -1,7 +1,14 @@
 {
  "feeds": {
   "primary-feed": {
-   "items": {}
+   "items": {
+    "*.iso.com": {
+     "type": "WILDCARD"
+    },
+    "*.verisk.com": {
+     "type": "WILDCARD"
+    }
+   }
   }
  },
  "last_heartbeat": 1791810484.712529

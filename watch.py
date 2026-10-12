@@ -195,12 +195,11 @@ def main():
             continue
         check_feed(cfg, feed, state, notify=not (args.bootstrap or args.dry_run))
 
-    if args.dry_run or args.bootstrap:
+    # ALWAYS persist: detected items must be recorded immediately or the next
+    # cycle would re-alert on them (the heartbeat alone is not a save trigger).
+    maybe_update_heartbeat(state)
+    if not args.dry_run:
         save_state(state)
-
-    if maybe_update_heartbeat(state):
-        save_state(state)
-        log("heartbeat updated")
 
 
 if __name__ == "__main__":
